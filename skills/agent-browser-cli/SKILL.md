@@ -9,7 +9,19 @@ description: 使用 agent-browser-cli 进行浏览器感知与控制。适用于
 
 ## 项目路径
 
-在仓库根目录创建并使用虚拟环境：
+安装后必须把下面的占位路径替换为用户本机真实项目路径，避免 AI 在其它项目目录里误找工具：
+
+```bash
+<AGENT_BROWSER_CLI_PROJECT_DIR>
+```
+
+日常调用先进入用户本机真实项目路径：
+
+```bash
+cd <AGENT_BROWSER_CLI_PROJECT_DIR>
+```
+
+在项目根目录创建并使用虚拟环境：
 
 ```bash
 .venv/bin/python
@@ -81,7 +93,7 @@ PY
 日常操作优先使用 `agent_browser_cli.py`，避免每次都新起 Python 进程并重新初始化浏览器标签会话。
 
 ```bash
-cd /path/to/agent-browser-cli
+cd <AGENT_BROWSER_CLI_PROJECT_DIR>
 .venv/bin/python agent_browser_cli.py status
 .venv/bin/python agent_browser_cli.py tabs
 .venv/bin/python agent_browser_cli.py scan --tabs-only

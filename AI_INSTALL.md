@@ -11,7 +11,7 @@
 3. 在项目目录创建 .venv 虚拟环境，并安装 requirements.txt。
 4. 指导我在 Chrome 中加载 assets/tmwd_cdp_bridge 解压扩展。
 5. 如果之前已经加载过扩展，必须在 chrome://extensions 里重新加载 `assets/tmwd_cdp_bridge`，确保最新 `config.js` 和 `background.js` 生效。
-6. 将 skills/agent-browser-cli/SKILL.md 安装到当前 AI 可识别的 skills 目录。
+6. 将 skills/agent-browser-cli/SKILL.md 安装到当前 AI 可识别的 skills 目录，并把 `<AGENT_BROWSER_CLI_PROJECT_DIR>` 替换为用户本机真实项目路径。
 7. 执行 agent_browser_cli.py tabs、open 和 status 验证可用。
 8. 如果已经安装过旧版 GenericAgent 的 tmwd_cdp_bridge 扩展，不要直接复用旧扩展；必须确认扩展目录来自当前项目并已重新加载。
 ```
@@ -23,8 +23,10 @@
 如果已经下载，进入现有项目目录：
 
 ```bash
-cd /path/to/agent-browser-cli
+cd <用户本机真实项目路径>
 ```
+
+进入目录后用 `pwd` 记录真实路径，后续安装 skill 时必须写入 `SKILL.md`。
 
 如果还没有下载，先询问用户希望下载到哪个父目录，例如：
 
@@ -90,6 +92,8 @@ Chrome 至少需要打开一个正常网页标签页，不要只停留在 `about
 ## 5. 安装 skill
 
 将仓库中的 `skills/agent-browser-cli/SKILL.md` 安装到 AI 使用的 skills 目录。
+
+安装前必须把 `SKILL.md` 里的 `<AGENT_BROWSER_CLI_PROJECT_DIR>` 替换为第 1 步记录的用户本机真实项目路径。不要保留 `/path/to/agent-browser-cli` 这类占位路径，也不要写成安装说明作者本机的路径。
 
 通用目录示例：
 
