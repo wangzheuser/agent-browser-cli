@@ -51,6 +51,23 @@ Please read https://github.com/sleepinginsummer/agent-browser-cli/blob/main/AI_I
 - Includes several optimizations to reduce command execution time.
 - Rust implementation for the CLI side.
 
+## Performance Reference
+
+The following numbers are measured with the long-lived service already running and the Chrome extension already connected. Actual latency depends on page complexity, network conditions, Chrome state, and response size.
+
+| Operation | Reference Latency |
+| --- | --- |
+| Open a Baidu tab | About `0.10s` |
+| Inject JS to enter a keyword and submit search | About `0.27s` |
+| Open Baidu and search “小猫” end-to-end | About `0.37s` |
+| `scan --tab --text-only` to read page text | About `0.04-0.12s` |
+| `exec 'return document.title'` for simple JS | About `0.04-0.12s` |
+| `exec 'return document.body.innerText'` to read body text | Mostly `0.04-0.05s`, occasional `0.30s` |
+| Query DOM link lists | About `0.27-0.36s` |
+| `exec --monitor` page-change summary | About `0.72-0.88s` |
+
+Rule of thumb: normal page reads and simple JS injection are around the `50ms` level; complex DOM queries depend on page structure and returned data size, commonly around `300ms`; `--monitor` adds page-change summary work and is usually close to `0.8s`.
+
 ## Layout
 
 ```text
