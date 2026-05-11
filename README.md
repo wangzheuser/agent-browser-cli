@@ -9,9 +9,8 @@
 <p>
   <a href="https://github.com/sleepinginsummer/agent-browser-cli"><img src="https://img.shields.io/badge/CLI-agentbrowsercli-2ea44f" alt="CLI agentbrowsercli"></a>
   <a href="https://github.com/sleepinginsummer/agent-browser-cli/blob/main/LICENSE"><img src="https://img.shields.io/badge/License-MIT-green" alt="License MIT"></a>
-  <a href="https://www.python.org/"><img src="https://img.shields.io/badge/Python-%3E%3D3.10-3776AB?logo=python&logoColor=white" alt="Python >=3.10"></a>
   <a href="https://github.com/sleepinginsummer/agent-browser-cli"><img src="https://img.shields.io/badge/Windows-MacOS-0078D6?labelColor=0078D6&color=C0C0C0" alt="Windows/MacOS"></a>
-  <a href="https://github.com/sleepinginsummer/agent-browser-cli/releases"><img src="https://img.shields.io/badge/release-v0.1.1-blue" alt="release v0.1.1"></a>
+  <a href="https://github.com/sleepinginsummer/agent-browser-cli/releases"><img src="https://img.shields.io/badge/release-v0.2.0-blue" alt="release v0.2.0"></a>
   <a href="https://github.com/sleepinginsummer/agent-browser-cli/pulls"><img src="https://img.shields.io/badge/PRs-welcome-brightgreen" alt="PRs welcome"></a>
 </p>
 
@@ -27,9 +26,9 @@
 
 ## 项目信息
 
-- 当前版本：`0.1.1`
+- 当前版本：`0.2.0`
 - 支持平台：Windows、macOS
-- Python：建议 `3.10+`
+- 运行时：Rust 原生二进制；npm 安装时按平台选择二进制包
 - 浏览器：Chrome / Chromium，需加载 `assets/tmwd_cdp_bridge`
 
 ## 致谢
@@ -68,6 +67,33 @@
 
 ## 手动安装
 
+### npm 安装
+
+```bash
+npm install -g @sleepinsummer/agent-browser-cli
+agent-browser-cli tabs
+```
+
+当前 npm 分发采用主包 + 平台二进制包：
+
+```text
+@sleepinsummer/agent-browser-cli
+@sleepinsummer/agent-browser-cli-darwin-arm64
+@sleepinsummer/agent-browser-cli-darwin-x64
+@sleepinsummer/agent-browser-cli-win32-x64
+```
+
+### 本地源码构建
+
+```bash
+cargo build --release
+./target/release/agent-browser-cli tabs
+```
+
+### Python 旧版运行方式
+
+Python 实现暂时保留为迁移参考和回退入口：
+
 ```bash
 cd /path/to/agent-browser-cli
 python3 -m venv .venv
@@ -87,8 +113,8 @@ Chrome 需要至少打开一个正常网页标签页，不要只停留在 `about
 ## 快速自检
 
 ```bash
-.venv/bin/python agent_browser_cli.py tabs
-.venv/bin/python agent_browser_cli.py open https://www.baidu.com
+agent-browser-cli tabs
+agent-browser-cli open https://www.baidu.com
 ```
 
 成功时会返回：
@@ -110,15 +136,15 @@ Chrome 需要至少打开一个正常网页标签页，不要只停留在 `about
 README 只保留快速入口；完整命令和浏览器操作 SOP 见 [skills/agent-browser-cli/SKILL.md](./skills/agent-browser-cli/SKILL.md)。
 
 ```bash
-.venv/bin/python agent_browser_cli.py tabs
+agent-browser-cli tabs
 ```
 
 ## 更新
 
 ```bash
 git pull
-.venv/bin/python -m pip install -r requirements.txt
-.venv/bin/python agent_browser_cli.py restart
+cargo build --release
+./target/release/agent-browser-cli restart
 ```
 
 如果 Chrome 扩展有更新，在 `chrome://extensions` 中重新加载 `assets/tmwd_cdp_bridge` 扩展。
@@ -141,13 +167,12 @@ cp skills/agent-browser-cli/SKILL.md ~/.agents/skills/agent-browser-cli/SKILL.md
 先停止常驻服务：
 
 ```bash
-.venv/bin/python agent_browser_cli.py stop
+agent-browser-cli stop
 ```
 
 然后按需清理：
 
 ```bash
-rm -rf .venv
 rm -f .agent-browser-cli.log .agent-browser-cli.lock
 rm -rf ~/.agents/skills/agent-browser-cli
 ```

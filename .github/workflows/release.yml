@@ -1,0 +1,83 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Build ${{ matrix.name }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: darwin-arm64
+            os: macos-14
+            target: aarch64-apple-darwin
+            binary: agent-browser-cli
+          - name: darwin-x64
+            os: macos-13
+            target: x86_64-apple-darwin
+            binary: agent-browser-cli
+          - name: win32-x64
+            os: windows-2022
+            target: x86_64-pc-windows-msvc
+            binary: agent-browser-cli.exe
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          registry-url: https://registry.npmjs.org
+
+      - name: Build
+        run: cargo build --release --target ${{ matrix.target }}
+
+      - name: Package platform npm package
+        run: node scripts/package-platform.mjs ${{ matrix.name }} target/${{ matrix.target }}/release/${{ matrix.binary }}
+
+      - name: Upload binary artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: agent-browser-cli-${{ matrix.name }}
+          path: target/${{ matrix.target }}/release/${{ matrix.binary }}
+
+      - name: Upload npm package artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: npm-${{ matrix.name }}
+          path: npm/platform/${{ matrix.name }}
+
+  github-release:
+    name: GitHub Release
+    needs: build
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/')
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: agent-browser-cli-*
+          path: dist
+          merge-multiple: true
+
+      - name: Create release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "${GITHUB_REF_NAME}" dist/* \
+            --title "${GITHUB_REF_NAME}" \
+            --notes "Rust/npm native release for macOS and Windows."

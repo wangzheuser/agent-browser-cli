@@ -26,4 +26,5 @@ env/
 # Build / packaging
 build/
 dist/
+target/
 *.egg-info/

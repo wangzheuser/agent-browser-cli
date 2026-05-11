@@ -9,9 +9,8 @@ Browser perception · Page control · Chrome session reuse · CDP · Conditional
 <p>
   <a href="https://github.com/sleepinginsummer/agent-browser-cli"><img src="https://img.shields.io/badge/CLI-agentbrowsercli-2ea44f" alt="CLI agentbrowsercli"></a>
   <a href="https://github.com/sleepinginsummer/agent-browser-cli/blob/main/LICENSE"><img src="https://img.shields.io/badge/License-MIT-green" alt="License MIT"></a>
-  <a href="https://www.python.org/"><img src="https://img.shields.io/badge/Python-%3E%3D3.10-3776AB?logo=python&logoColor=white" alt="Python >=3.10"></a>
   <a href="https://github.com/sleepinginsummer/agent-browser-cli"><img src="https://img.shields.io/badge/Windows-MacOS-0078D6?labelColor=0078D6&color=C0C0C0" alt="Windows/MacOS"></a>
-  <a href="https://github.com/sleepinginsummer/agent-browser-cli/releases"><img src="https://img.shields.io/badge/release-v0.1.1-blue" alt="release v0.1.1"></a>
+  <a href="https://github.com/sleepinginsummer/agent-browser-cli/releases"><img src="https://img.shields.io/badge/release-v0.2.0-blue" alt="release v0.2.0"></a>
   <a href="https://github.com/sleepinginsummer/agent-browser-cli/pulls"><img src="https://img.shields.io/badge/PRs-welcome-brightgreen" alt="PRs welcome"></a>
 </p>
 
@@ -27,9 +26,9 @@ This project is not Selenium or Playwright. It is better suited for helping agen
 
 ## Project Info
 
-- Current version: `0.1.1`
+- Current version: `0.2.0`
 - Supported platforms: Windows, macOS
-- Python: `3.10+` recommended
+- Runtime: native Rust binary; npm installs the matching platform package
 - Browser: Chrome / Chromium, with `assets/tmwd_cdp_bridge` loaded
 
 ## Acknowledgements
@@ -68,6 +67,33 @@ Please read https://github.com/sleepinginsummer/agent-browser-cli/blob/main/AI_I
 
 ## Manual Installation
 
+### npm
+
+```bash
+npm install -g @sleepinsummer/agent-browser-cli
+agent-browser-cli tabs
+```
+
+The npm distribution uses one main package plus platform binary packages:
+
+```text
+@sleepinsummer/agent-browser-cli
+@sleepinsummer/agent-browser-cli-darwin-arm64
+@sleepinsummer/agent-browser-cli-darwin-x64
+@sleepinsummer/agent-browser-cli-win32-x64
+```
+
+### Build From Source
+
+```bash
+cargo build --release
+./target/release/agent-browser-cli tabs
+```
+
+### Legacy Python Fallback
+
+The Python implementation is kept as a migration reference and fallback path:
+
 ```bash
 cd /path/to/agent-browser-cli
 python3 -m venv .venv
@@ -87,8 +113,8 @@ Chrome needs at least one normal web page tab open. Do not leave it only on `abo
 ## Quick Check
 
 ```bash
-.venv/bin/python agent_browser_cli.py tabs
-.venv/bin/python agent_browser_cli.py open https://www.baidu.com
+agent-browser-cli tabs
+agent-browser-cli open https://www.baidu.com
 ```
 
 On success, it returns:
@@ -110,15 +136,15 @@ On success, it returns:
 The README only keeps the quick entry point. For the full command list and browser operation SOP, see [skills/agent-browser-cli/SKILL.md](./skills/agent-browser-cli/SKILL.md).
 
 ```bash
-.venv/bin/python agent_browser_cli.py tabs
+agent-browser-cli tabs
 ```
 
 ## Update
 
 ```bash
 git pull
-.venv/bin/python -m pip install -r requirements.txt
-.venv/bin/python agent_browser_cli.py restart
+cargo build --release
+./target/release/agent-browser-cli restart
 ```
 
 If the Chrome extension has updates, reload the `assets/tmwd_cdp_bridge` extension in `chrome://extensions`.
@@ -141,13 +167,12 @@ cp skills/agent-browser-cli/SKILL.md ~/.agents/skills/agent-browser-cli/SKILL.md
 Stop the long-lived service first:
 
 ```bash
-.venv/bin/python agent_browser_cli.py stop
+agent-browser-cli stop
 ```
 
 Then clean up as needed:
 
 ```bash
-rm -rf .venv
 rm -f .agent-browser-cli.log .agent-browser-cli.lock
 rm -rf ~/.agents/skills/agent-browser-cli
 ```
