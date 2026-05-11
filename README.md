@@ -10,7 +10,7 @@
   <a href="https://github.com/sleepinginsummer/agent-browser-cli"><img src="https://img.shields.io/badge/CLI-agentbrowsercli-2ea44f" alt="CLI agentbrowsercli"></a>
   <a href="https://github.com/sleepinginsummer/agent-browser-cli/blob/main/LICENSE"><img src="https://img.shields.io/badge/License-MIT-green" alt="License MIT"></a>
   <a href="https://github.com/sleepinginsummer/agent-browser-cli"><img src="https://img.shields.io/badge/Windows-MacOS-0078D6?labelColor=0078D6&color=C0C0C0" alt="Windows/MacOS"></a>
-  <a href="https://github.com/sleepinginsummer/agent-browser-cli/releases"><img src="https://img.shields.io/badge/release-v0.2.0-blue" alt="release v0.2.0"></a>
+  <a href="https://github.com/sleepinginsummer/agent-browser-cli/releases"><img src="https://img.shields.io/badge/release-v0.2.1-blue" alt="release v0.2.1"></a>
   <a href="https://github.com/sleepinginsummer/agent-browser-cli/pulls"><img src="https://img.shields.io/badge/PRs-welcome-brightgreen" alt="PRs welcome"></a>
 </p>
 
@@ -26,9 +26,8 @@
 
 ## 项目信息
 
-- 当前版本：`0.2.0`
+- 当前版本：`0.2.1`
 - 支持平台：Windows、macOS
-- 运行时：Rust 原生二进制；npm 安装时按平台选择二进制包
 - 浏览器：Chrome / Chromium，需加载 `assets/tmwd_cdp_bridge`
 
 ## 致谢
@@ -50,19 +49,19 @@
 - 新增启动锁，避免多个 CLI 并发启动时重复绑定底层端口。
 - 增加skill：`skills/agent-browser-cli/SKILL.md`，提供ai参考使用。
 - 若干优化，缩短命令执行时间
+- rust实现cli端
 
 ## 目录结构
 
 ```text
 .
-├── agent_browser_cli.py          # 命令行入口
-├── agent_browser_server.py       # 常驻 HTTP 服务
-├── ga.py                         # web_scan / web_execute_js 入口
-├── TMWebDriver.py                # 浏览器扩展 WebSocket / HTTP 桥
-├── simphtml.py                   # 页面简化和 DOM diff
+├── Cargo.toml                    # Rust 工程配置
+├── src/                          # Rust CLI / 常驻服务 / bridge
 ├── assets/tmwd_cdp_bridge/       # Chrome MV3 扩展
-├── memory/                       # 浏览器工具 SOP
-└── skills/agent-browser-cli/     #  skill
+├── assets/simphtml_opt.js        # 页面简化脚本
+├── assets/simphtml_find_list.js  # 列表识别脚本
+├── npm/                          # npm 启动脚本
+└── skills/agent-browser-cli/     # skill
 ```
 
 ## 手动安装
@@ -74,15 +73,6 @@ npm install -g @sleepinsummer/agent-browser-cli
 agent-browser-cli tabs
 ```
 
-当前 npm 分发采用主包 + 平台二进制包：
-
-```text
-@sleepinsummer/agent-browser-cli
-@sleepinsummer/agent-browser-cli-darwin-arm64
-@sleepinsummer/agent-browser-cli-darwin-x64
-@sleepinsummer/agent-browser-cli-win32-x64
-```
-
 ### 本地源码构建
 
 ```bash
@@ -90,15 +80,6 @@ cargo build --release
 ./target/release/agent-browser-cli tabs
 ```
 
-### Python 旧版运行方式
-
-Python 实现暂时保留为迁移参考和回退入口：
-
-```bash
-cd /path/to/agent-browser-cli
-python3 -m venv .venv
-.venv/bin/python -m pip install -r requirements.txt
-```
 
 ## Chrome 扩展
 
@@ -182,7 +163,6 @@ rm -rf ~/.agents/skills/agent-browser-cli
 ## 端口
 
 - `18765`：底层 `TMWebDriver` WebSocket，Chrome 扩展连接使用。
-- `18766`：底层 `TMWebDriver` HTTP `/link`，用于内部 master/remote 协议。
 - `18767`：外层 `agent-browser-cli` HTTP 服务，供 CLI 复用会话。
 
 ## 友情链接

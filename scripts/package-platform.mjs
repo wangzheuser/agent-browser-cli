@@ -30,7 +30,7 @@ fs.writeFileSync(
   JSON.stringify(
     {
       name: `@sleepinsummer/agent-browser-cli-${targetName}`,
-      version: "0.2.0",
+      version: "0.2.1",
       license: "MIT",
       os: meta.os,
       cpu: meta.cpu,

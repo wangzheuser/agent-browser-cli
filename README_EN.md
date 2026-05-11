@@ -10,7 +10,7 @@ Browser perception · Page control · Chrome session reuse · CDP · Conditional
   <a href="https://github.com/sleepinginsummer/agent-browser-cli"><img src="https://img.shields.io/badge/CLI-agentbrowsercli-2ea44f" alt="CLI agentbrowsercli"></a>
   <a href="https://github.com/sleepinginsummer/agent-browser-cli/blob/main/LICENSE"><img src="https://img.shields.io/badge/License-MIT-green" alt="License MIT"></a>
   <a href="https://github.com/sleepinginsummer/agent-browser-cli"><img src="https://img.shields.io/badge/Windows-MacOS-0078D6?labelColor=0078D6&color=C0C0C0" alt="Windows/MacOS"></a>
-  <a href="https://github.com/sleepinginsummer/agent-browser-cli/releases"><img src="https://img.shields.io/badge/release-v0.2.0-blue" alt="release v0.2.0"></a>
+  <a href="https://github.com/sleepinginsummer/agent-browser-cli/releases"><img src="https://img.shields.io/badge/release-v0.2.1-blue" alt="release v0.2.1"></a>
   <a href="https://github.com/sleepinginsummer/agent-browser-cli/pulls"><img src="https://img.shields.io/badge/PRs-welcome-brightgreen" alt="PRs welcome"></a>
 </p>
 
@@ -26,9 +26,8 @@ This project is not Selenium or Playwright. It is better suited for helping agen
 
 ## Project Info
 
-- Current version: `0.2.0`
+- Current version: `0.2.1`
 - Supported platforms: Windows, macOS
-- Runtime: native Rust binary; npm installs the matching platform package
 - Browser: Chrome / Chromium, with `assets/tmwd_cdp_bridge` loaded
 
 ## Acknowledgements
@@ -50,18 +49,18 @@ Please read https://github.com/sleepinginsummer/agent-browser-cli/blob/main/AI_I
 - Adds a startup lock to avoid repeated low-level port binding when multiple CLI commands start concurrently.
 - Adds the skill `skills/agent-browser-cli/SKILL.md` for AI usage reference.
 - Includes several optimizations to reduce command execution time.
+- Rust implementation for the CLI side.
 
 ## Layout
 
 ```text
 .
-├── agent_browser_cli.py          # CLI entry
-├── agent_browser_server.py       # Long-lived HTTP service
-├── ga.py                         # web_scan / web_execute_js entry
-├── TMWebDriver.py                # Browser extension WebSocket / HTTP bridge
-├── simphtml.py                   # Page simplification and DOM diff
+├── Cargo.toml                    # Rust crate config
+├── src/                          # Rust CLI / daemon / bridge
 ├── assets/tmwd_cdp_bridge/       # Chrome MV3 extension
-├── memory/                       # Browser tool SOPs
+├── assets/simphtml_opt.js        # Page simplification script
+├── assets/simphtml_find_list.js  # List detection script
+├── npm/                          # npm launcher scripts
 └── skills/agent-browser-cli/     # skill
 ```
 
@@ -74,15 +73,6 @@ npm install -g @sleepinsummer/agent-browser-cli
 agent-browser-cli tabs
 ```
 
-The npm distribution uses one main package plus platform binary packages:
-
-```text
-@sleepinsummer/agent-browser-cli
-@sleepinsummer/agent-browser-cli-darwin-arm64
-@sleepinsummer/agent-browser-cli-darwin-x64
-@sleepinsummer/agent-browser-cli-win32-x64
-```
-
 ### Build From Source
 
 ```bash
@@ -90,15 +80,6 @@ cargo build --release
 ./target/release/agent-browser-cli tabs
 ```
 
-### Legacy Python Fallback
-
-The Python implementation is kept as a migration reference and fallback path:
-
-```bash
-cd /path/to/agent-browser-cli
-python3 -m venv .venv
-.venv/bin/python -m pip install -r requirements.txt
-```
 
 ## Chrome Extension
 
@@ -182,7 +163,6 @@ Finally, remove the `TMWD CDP Bridge` extension from Chrome's extension manageme
 ## Ports
 
 - `18765`: underlying `TMWebDriver` WebSocket, used by the Chrome extension.
-- `18766`: underlying `TMWebDriver` HTTP `/link`, used by the internal master/remote protocol.
 - `18767`: outer `agent-browser-cli` HTTP service, used by the CLI to reuse the session.
 
 ## Friendly Links

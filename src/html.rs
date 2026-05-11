@@ -1,31 +1,15 @@
-use anyhow::{anyhow, Result};
 use html5ever::tendril::TendrilSink;
 use html5ever::{parse_document, serialize, ParseOpts};
 use markup5ever_rcdom::{Handle, NodeData, RcDom, SerializableHandle};
 use serde_json::{json, Value};
 use std::io::Cursor;
 
-const SIMPHTML: &str = include_str!("../simphtml.py");
-
-pub fn js_opt_html() -> Result<&'static str> {
-    extract_raw_py_string("js_optHTML")
+pub fn js_opt_html() -> &'static str {
+    include_str!("../assets/simphtml_opt.js")
 }
 
-pub fn js_find_main_list() -> Result<&'static str> {
-    extract_raw_py_string("js_findMainList")
-}
-
-fn extract_raw_py_string(name: &str) -> Result<&'static str> {
-    let marker = format!("{name} = r'''");
-    let start = SIMPHTML
-        .find(&marker)
-        .ok_or_else(|| anyhow!("未找到 {name}"))?
-        + marker.len();
-    let rest = &SIMPHTML[start..];
-    let end = rest
-        .find("'''")
-        .ok_or_else(|| anyhow!("未找到 {name} 结束标记"))?;
-    Ok(&rest[..end])
+pub fn js_find_main_list() -> &'static str {
+    include_str!("../assets/simphtml_find_list.js")
 }
 
 pub fn optimize_html_for_tokens(html: &str) -> String {

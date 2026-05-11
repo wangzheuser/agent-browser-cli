@@ -259,7 +259,7 @@ async fn tabs(State(state): State<AppState>) -> Json<Value> {
 
 async fn scan(State(state): State<AppState>, Json(req): Json<ScanRequest>) -> Json<Value> {
     touch(&state).await;
-    let result = web_scan(&state, req.tabs_only, req.switch_tab_id, req.text_only).await;
+    let result = scan_page(&state, req.tabs_only, req.switch_tab_id, req.text_only).await;
     Json(match result {
         Ok(value) => json!({ "ok": true, "result": value }),
         Err(err) => json!({ "ok": false, "error": err.to_string() }),
@@ -278,7 +278,7 @@ async fn exec(State(state): State<AppState>, Json(req): Json<ExecRequest>) -> Js
     } else {
         req.script.clone()
     };
-    let result = web_execute_js(&state, &script, req.switch_tab_id, req.no_monitor).await;
+    let result = execute_page_js(&state, &script, req.switch_tab_id, req.no_monitor).await;
     Json(match result {
         Ok(value) => {
             json!({ "ok": true, "result": value, "combined_wait": req.wait_js.is_some() && !is_extension_json(&req.script) })
@@ -291,7 +291,7 @@ async fn open_tab(State(state): State<AppState>, Json(req): Json<OpenRequest>) -
     touch(&state).await;
     let payload = json!({ "cmd": "openTab", "url": normalize_url(&req.url), "active": req.active })
         .to_string();
-    let result = web_execute_js(&state, &payload, req.switch_tab_id, true).await;
+    let result = execute_page_js(&state, &payload, req.switch_tab_id, true).await;
     Json(match result {
         Ok(value) => json!({ "ok": true, "result": value }),
         Err(err) => json!({ "ok": false, "error": err.to_string() }),
@@ -354,7 +354,7 @@ async fn has_active_sessions(state: &AppState) -> bool {
     driver.sessions.values().any(|s| s.is_active())
 }
 
-async fn web_scan(
+async fn scan_page(
     state: &AppState,
     tabs_only: bool,
     switch_tab_id: Option<String>,
@@ -385,7 +385,7 @@ async fn web_scan(
     Ok(result)
 }
 
-async fn web_execute_js(
+async fn execute_page_js(
     state: &AppState,
     script: &str,
     switch_tab_id: Option<String>,
@@ -507,7 +507,7 @@ async fn get_html(
     maxchars: usize,
     text_only: bool,
 ) -> Result<String> {
-    let opt = html::js_opt_html()?;
+    let opt = html::js_opt_html();
     let page_script = format!(
         "{opt}\nreturn optHTML({});",
         if text_only { "true" } else { "false" }
@@ -526,7 +526,7 @@ async fn get_html(
     if cutlist {
         let list_script = format!(
             "{}\nreturn findMainList(document.body);",
-            html::js_find_main_list()?
+            html::js_find_main_list()
         );
         let _ = execute_raw_js(state, &list_script, Duration::from_secs(10)).await;
     }
