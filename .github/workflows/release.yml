@@ -67,7 +67,11 @@ jobs:
           if npm view "${PACKAGE_NAME}@${PACKAGE_VERSION}" version >/dev/null 2>&1; then
             echo "${PACKAGE_NAME}@${PACKAGE_VERSION} already exists, skip publish."
           else
-            npm publish "${PACKAGE_DIR}" --provenance --access public
+            if [ -n "${NODE_AUTH_TOKEN:-}" ]; then
+              npm publish "${PACKAGE_DIR}" --provenance --access public
+            else
+              echo "NPM_TOKEN is not configured, skip npm publish."
+            fi
           fi
 
       - name: Upload binary artifact
@@ -106,7 +110,11 @@ jobs:
           if npm view "${PACKAGE_NAME}@${PACKAGE_VERSION}" version >/dev/null 2>&1; then
             echo "${PACKAGE_NAME}@${PACKAGE_VERSION} already exists, skip publish."
           else
-            npm publish --provenance --access public
+            if [ -n "${NODE_AUTH_TOKEN:-}" ]; then
+              npm publish --provenance --access public
+            else
+              echo "NPM_TOKEN is not configured, skip npm publish."
+            fi
           fi
 
   github-release:
