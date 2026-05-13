@@ -195,7 +195,7 @@ rm -rf ~/.agents/skills/agent-browser-cli
 ## 友情链接
 
 - [LINUX DO - 新的理想型社区](https://linux.do/)
-- [GenericAgent](https://github.com/lsdefine/GenericAgent/tree/main)
+- [GenericAgent--复旦团队研发|仅仅~3K行代码 Self-Evolving Agent](https://github.com/lsdefine/GenericAgent/tree/main)
 
 ## 许可证
 

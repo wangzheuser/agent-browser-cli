@@ -195,7 +195,7 @@ Finally, remove the `TMWD CDP Bridge` extension from Chrome's extension manageme
 ## Friendly Links
 
 - [LINUX DO - A New Ideal Community](https://linux.do/)
-- [GenericAgent](https://github.com/lsdefine/GenericAgent/tree/main)
+- [GenericAgent--复旦团队研发|仅仅~3K行代码 Self-Evolving Agent](https://github.com/lsdefine/GenericAgent/tree/main)
 
 ## License
 
