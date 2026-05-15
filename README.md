@@ -10,7 +10,7 @@
   <a href="https://github.com/sleepinginsummer/agent-browser-cli"><img src="https://img.shields.io/badge/CLI-agentbrowsercli-2ea44f" alt="CLI agentbrowsercli"></a>
   <a href="https://github.com/sleepinginsummer/agent-browser-cli/blob/main/LICENSE"><img src="https://img.shields.io/badge/License-MIT-green" alt="License MIT"></a>
   <a href="https://github.com/sleepinginsummer/agent-browser-cli"><img src="https://img.shields.io/badge/sys-win%2Fmac%2Flinux-0078D6?labelColor=0078D6&color=C0C0C0" alt="sys win/mac/linux"></a>
-  <a href="https://github.com/sleepinginsummer/agent-browser-cli/releases"><img src="https://img.shields.io/badge/release-v0.2.6-blue" alt="release v0.2.6"></a>
+  <a href="https://github.com/sleepinginsummer/agent-browser-cli/releases"><img src="https://img.shields.io/badge/release-v0.2.7-blue" alt="release v0.2.7"></a>
   <a href="https://github.com/sleepinginsummer/agent-browser-cli/pulls"><img src="https://img.shields.io/badge/PRs-welcome-brightgreen" alt="PRs welcome"></a>
 </p>
 
@@ -26,7 +26,7 @@
 
 ## 项目信息
 
-- 当前版本：`0.2.6`
+- 当前版本：`0.2.7`
 - 支持平台：Windows（包括 WSL）/ Mac / Linux
 - 浏览器：Chrome，需加载拓展 `assets/tmwd_cdp_bridge`
 - Linux 支持前提：本机 Chrome / Chromium 需要支持安装扩展
