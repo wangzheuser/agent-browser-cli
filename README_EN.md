@@ -160,6 +160,10 @@ After manually editing the config file, run `agent-browser-cli restart` so the d
 
 The Chrome extension popup can also update the extension port and reconnect immediately. The popup port must match the CLI `extension_port` config.
 
+### Dialog Suppression
+
+The extension no longer rewrites page `alert` / `confirm` / `prompt` globally. Native dialogs are suppressed only while a CLI page script command is running, then restored after the command finishes.
+
 ## Quick Check
 
 ```bash
@@ -181,12 +185,33 @@ On success, it returns:
 }
 ```
 
+### Profile Label
+
+When multiple Chrome Profiles or browser instances are connected, `profile_id` and `browser_id` are long. You can set a short label for each Chrome Profile and then use `--profile <label>`.
+
+```bash
+agent-browser-cli lookup tab <tabId>
+agent-browser-cli lookup browser <browser_id>
+agent-browser-cli profile-label set work --profile <profile_id>
+agent-browser-cli tabs --profile work
+```
+
+You can also set Profile Label from the extension popup in the corresponding Chrome Profile. The label is only an alias; internal routing still uses `browser_id:profile_id:tab_id`. If a label matches multiple profiles in the current daemon, the CLI reports ambiguity. Prefer setting labels via CLI because it checks uniqueness across currently connected profiles; the popup is a local convenience entry and cannot guarantee cross-profile uniqueness. `tabtree` uses compact output by default; pass `--full` for full URLs and session keys.
+
 ## Common Commands
 
 The README only keeps the quick entry point. For the full command list and browser operation SOP, see [skills/agent-browser-cli/SKILL.md](./skills/agent-browser-cli/SKILL.md).
 
 ```bash
 agent-browser-cli tabs
+agent-browser-cli tabtree
+agent-browser-cli tabtree --full
+agent-browser-cli tabtree --profile <profile_label>
+agent-browser-cli tabtree --tab <tabId>
+agent-browser-cli lookup tab <tabId>
+agent-browser-cli lookup browser <browser_id>
+agent-browser-cli profile-label set work --profile <profile_id>
+agent-browser-cli profile-label clear --profile <profile_id>
 ```
 
 ## Update

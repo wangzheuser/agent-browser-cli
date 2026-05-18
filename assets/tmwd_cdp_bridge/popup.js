@@ -1,8 +1,12 @@
 document.addEventListener('DOMContentLoaded', () => {
   const btn = document.getElementById('refresh');
   const savePortBtn = document.getElementById('savePort');
+  const saveProfileLabelBtn = document.getElementById('saveProfileLabel');
+  const clearProfileLabelBtn = document.getElementById('clearProfileLabel');
   btn.addEventListener('click', fetchCookies);
   savePortBtn.addEventListener('click', savePort);
+  saveProfileLabelBtn.addEventListener('click', saveProfileLabel);
+  clearProfileLabelBtn.addEventListener('click', clearProfileLabel);
   refreshBridgeStatus();
   fetchCookies();
 });
@@ -16,9 +20,49 @@ async function refreshBridgeStatus() {
     const data = resp.data || {};
     portInput.value = data.wsPort || 18765;
     status.textContent = `状态: ${data.wsConnected ? '已连接' : '未连接'} ${data.wsUrl || ''}`;
+    renderProfileStatus(data);
   } catch (e) {
     status.textContent = '状态读取失败: ' + e.message;
     status.className = 'error';
+    const profileStatus = document.getElementById('profileStatus');
+    profileStatus.textContent = 'Profile 读取失败: ' + e.message;
+    profileStatus.className = 'error';
+  }
+}
+
+function renderProfileStatus(data) {
+  const profileStatus = document.getElementById('profileStatus');
+  const profileLabelInput = document.getElementById('profileLabel');
+  const profileId = data.profileId || '-';
+  const browserId = data.browserId || '-';
+  const label = data.profileLabel || '';
+  profileLabelInput.value = label;
+  profileStatus.textContent = `Profile: ${label || '(未设置)'} / ${profileId} / ${browserId}`;
+  profileStatus.className = 'status';
+}
+
+async function saveProfileLabel() {
+  const input = document.getElementById('profileLabel');
+  await setProfileLabel(input.value);
+}
+
+async function clearProfileLabel() {
+  const input = document.getElementById('profileLabel');
+  input.value = '';
+  await setProfileLabel(null);
+}
+
+async function setProfileLabel(label) {
+  const profileMsg = document.getElementById('profileMsg');
+  try {
+    const resp = await chrome.runtime.sendMessage({ cmd: 'setProfileLabel', label });
+    if (!resp?.ok) throw new Error(resp?.error || 'unknown');
+    profileMsg.textContent = `Success: Profile Label ${resp.data?.profileLabel || '已清空'}`;
+    profileMsg.className = 'status';
+    await refreshBridgeStatus();
+  } catch (e) {
+    profileMsg.textContent = '保存失败: ' + e.message;
+    profileMsg.className = 'error';
   }
 }
 

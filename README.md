@@ -10,7 +10,7 @@
   <a href="https://github.com/sleepinginsummer/agent-browser-cli"><img src="https://img.shields.io/badge/CLI-agentbrowsercli-2ea44f" alt="CLI agentbrowsercli"></a>
   <a href="https://github.com/sleepinginsummer/agent-browser-cli/blob/main/LICENSE"><img src="https://img.shields.io/badge/License-MIT-green" alt="License MIT"></a>
   <a href="https://github.com/sleepinginsummer/agent-browser-cli"><img src="https://img.shields.io/badge/sys-win%2Fmac%2Flinux-0078D6?labelColor=0078D6&color=C0C0C0" alt="sys win/mac/linux"></a>
-  <a href="https://github.com/sleepinginsummer/agent-browser-cli/releases"><img src="https://img.shields.io/badge/release-v0.3.1--beta.1-orange" alt="release v0.3.1-beta.1"></a>
+  <a href="https://github.com/sleepinginsummer/agent-browser-cli/releases"><img src="https://img.shields.io/badge/release-v0.3.3-orange" alt="release v0.3.3"></a>
   <a href="https://github.com/sleepinginsummer/agent-browser-cli/pulls"><img src="https://img.shields.io/badge/PRs-welcome-brightgreen" alt="PRs welcome"></a>
 </p>
 
@@ -160,7 +160,25 @@ agent-browser-cli set-extension-port 18766
 
 Chrome 插件 popup 中也可以修改插件端口并立即重连。插件端口必须和 CLI 配置中的 `extension_port` 一致。
 
+### Profile Label
 
+多 Chrome Profile / 多浏览器实例下，`profile_id` 和 `browser_id` 较长。可以给每个 Chrome Profile 设置短 label，之后用 `--profile <label>` 操作。
+
+```bash
+agent-browser-cli lookup tab <tabId>
+agent-browser-cli lookup browser <browser_id>
+agent-browser-cli profile-label set work --profile <profile_id>
+agent-browser-cli tabs --profile work
+```
+
+也可以在对应 Chrome Profile 的扩展 popup 中设置 Profile Label。label 只作为别名，内部路由仍使用 `browser_id:profile_id:tab_id`；如果当前 daemon 内 label 匹配到多个 profile，CLI 会报歧义。推荐用 CLI 设置 label，因为 CLI 会校验当前 daemon 内跨 Profile 唯一性；popup 是本地便捷入口，不保证跨 Profile 唯一。`tabtree` 默认截断 URL 并省略 `session_key` 以减少 token，需完整字段时加 `--full`。
+
+
+
+
+### 弹窗抑制
+
+扩展不再默认重写页面的 `alert` / `confirm` / `prompt`。只有 CLI 执行页面脚本命令期间会临时抑制原生弹窗，命令结束后恢复，避免长期污染业务页面全局函数。
 
 ## 快速自检
 
@@ -189,6 +207,14 @@ README 只保留快速入口；完整命令和浏览器操作 SOP 见 [skills/ag
 
 ```bash
 agent-browser-cli tabs
+agent-browser-cli tabtree
+agent-browser-cli tabtree --full
+agent-browser-cli tabtree --profile <profile_label>
+agent-browser-cli tabtree --tab <tabId>
+agent-browser-cli lookup tab <tabId>
+agent-browser-cli lookup browser <browser_id>
+agent-browser-cli profile-label set work --profile <profile_id>
+agent-browser-cli profile-label clear --profile <profile_id>
 ```
 
 ## 更新

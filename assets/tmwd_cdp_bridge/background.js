@@ -42,6 +42,7 @@ function withClientIdentity(payload) {
 async function handleExtMessage(msg, sender) {
   if (msg.cmd === 'status') return handleStatus();
   if (msg.cmd === 'setPort') return await handleSetPort(msg);
+  if (msg.cmd === 'setProfileLabel') return await handleSetProfileLabel(msg);
   lastCommandAt = Date.now();
   if (msg.cmd === 'cookies') return await handleCookies(msg, sender);
   if (msg.cmd === 'cdp') return await handleCDP(msg, sender);
@@ -133,6 +134,29 @@ async function handleSetPort(msg) {
       wsPort,
       wsUrl: getWsUrl(),
       wsConnected: !!ws && ws.readyState === WebSocket.OPEN
+    }
+  };
+}
+
+function normalizeProfileLabel(label) {
+  const raw = String(label || '').trim();
+  if (!raw) return null;
+  if (raw.length > 40) throw new Error('Profile Label 长度不能超过 40 个字符');
+  if (!/^[A-Za-z0-9_.-]+$/.test(raw)) throw new Error('Profile Label 只能包含英文、数字、-、_、.');
+  return raw;
+}
+
+async function handleSetProfileLabel(msg) {
+  const label = normalizeProfileLabel(msg.label);
+  profileLabel = label;
+  await chrome.storage.local.set({ profileLabel });
+  await sendTabsUpdate();
+  return {
+    ok: true,
+    data: {
+      browserId,
+      profileId,
+      profileLabel
     }
   };
 }
@@ -618,6 +642,87 @@ async function injectContentScriptsIntoExistingTabs() {
   }
 }
 
+function buildDialogSuppressionScript(enabled) {
+  if (!enabled) {
+    return `(() => {
+      const state = window.__TMWD_DIALOG_SUPPRESSION__;
+      if (!state) return;
+      state.count = Math.max(0, Number(state.count || 1) - 1);
+      if (state.count > 0) return;
+      try {
+        window.alert = state.alert;
+        window.confirm = state.confirm;
+        window.prompt = state.prompt;
+      } finally {
+        delete window.__TMWD_DIALOG_SUPPRESSION__;
+      }
+    })()`;
+  }
+  return `(() => {
+    const existing = window.__TMWD_DIALOG_SUPPRESSION__;
+    if (existing) {
+      existing.count = Number(existing.count || 1) + 1;
+      return;
+    }
+    const state = {
+      count: 1,
+      alert: window.alert,
+      confirm: window.confirm,
+      prompt: window.prompt
+    };
+    window.__TMWD_DIALOG_SUPPRESSION__ = state;
+    const toast = (type, msg) => {
+      try { console.log('[TMWD] ' + type + ' suppressed during CLI command:', msg); } catch (_) {}
+      try {
+        const d = document.createElement('div');
+        d.textContent = '[' + type + '] ' + msg;
+        Object.assign(d.style, {
+          position:'fixed', top:'12px', right:'12px', zIndex:'2147483647',
+          background:'#222', color:'#fff', padding:'10px 18px', borderRadius:'8px',
+          fontSize:'14px', maxWidth:'420px', wordBreak:'break-all',
+          boxShadow:'0 4px 16px rgba(0,0,0,.3)', opacity:'1',
+          transition:'opacity .5s', pointerEvents:'none'
+        });
+        (document.body || document.documentElement).appendChild(d);
+        setTimeout(() => { d.style.opacity = '0'; }, 3000);
+        setTimeout(() => { d.remove(); }, 3600);
+      } catch (_) {}
+    };
+    window.alert = function(msg) { toast('alert', msg); };
+    window.confirm = function(msg) { toast('confirm', msg); return true; };
+    window.prompt = function(msg, def) { toast('prompt', msg); return def || null; };
+  })()`;
+}
+
+async function setDialogSuppressionByScripting(tabId, enabled) {
+  try {
+    await chrome.scripting.executeScript({
+      target: { tabId },
+      world: 'MAIN',
+      func: async (script) => await eval(script),
+      args: [buildDialogSuppressionScript(enabled)]
+    });
+    return true;
+  } catch (e) {
+    console.log('[TMWD-WS] dialog suppression scripting failed:', e.message);
+    return false;
+  }
+}
+
+async function setDialogSuppressionByCdp(tabId, enabled) {
+  try {
+    await chrome.debugger.sendCommand({ tabId }, 'Runtime.evaluate', {
+      expression: buildDialogSuppressionScript(enabled),
+      awaitPromise: true,
+      returnByValue: true
+    });
+    return true;
+  } catch (e) {
+    console.log('[TMWD-WS] dialog suppression CDP failed:', e.message);
+    return false;
+  }
+}
+
 // --- Shared page/CDP script builder core ---
 function buildExecScript(code, errorHandler) {
   return `(async () => {
@@ -764,6 +869,7 @@ async function handleWsExec(data) {
   const newTabIds = new Set();
   const onCreated = (tab) => { newTabIds.add(tab.id); };
   chrome.tabs.onCreated.addListener(onCreated);
+  await setDialogSuppressionByScripting(tabId, true);
   try {
     let res;
     try {
@@ -788,9 +894,11 @@ async function handleWsExec(data) {
       const wrappedCode = buildCdpScript(data.code);
       try {
         await chrome.debugger.attach({ tabId }, '1.3');
+        await setDialogSuppressionByCdp(tabId, true);
         const cdpRes = await chrome.debugger.sendCommand({ tabId }, 'Runtime.evaluate', {
           expression: wrappedCode, awaitPromise: true, returnByValue: true
         });
+        await setDialogSuppressionByCdp(tabId, false);
         await chrome.debugger.detach({ tabId });
         if (cdpRes.exceptionDetails) {
           const desc = cdpRes.exceptionDetails.exception?.description || 'CDP Error';
@@ -799,6 +907,7 @@ async function handleWsExec(data) {
           res = cdpRes.result.value;
         }
       } catch (cdpErr) {
+        try { await setDialogSuppressionByCdp(tabId, false); } catch (_) {}
         try { await chrome.debugger.detach({ tabId }); } catch (_) {}
         res = { ok: false, error: { name: 'Error', message: 'CDP fallback failed: ' + cdpErr.message, stack: '' } };
       }
@@ -812,7 +921,7 @@ async function handleWsExec(data) {
       try { const t = await chrome.tabs.get(id); newTabs.push({id: t.id, url: t.url, title: t.title}); } catch (_) {}
     }
     if (res?.ok) {
-      ws.send(JSON.stringify({ type: 'result', id: data.id, result: res.data, newTabs }));
+      ws.send(JSON.stringify({ type: 'result', id: data.id, result: res.data ?? null, newTabs }));
     } else {
       console.log(res);
       ws.send(JSON.stringify({ type: 'error', id: data.id, error: res?.error || 'Unknown error', newTabs }));
@@ -820,6 +929,7 @@ async function handleWsExec(data) {
   } catch (e) {
     ws.send(JSON.stringify({ type: 'error', id: data.id, error: { name: e.name || 'Error', message: e.message || String(e), stack: e.stack || '' } }));
   } finally {
+    await setDialogSuppressionByScripting(tabId, false);
     chrome.tabs.onCreated.removeListener(onCreated);
   }
 }

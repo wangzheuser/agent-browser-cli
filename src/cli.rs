@@ -26,6 +26,10 @@ pub struct Cli {
 #[derive(Debug, Subcommand)]
 enum CommandKind {
     Tabs(TabsArgs),
+    Tabtree(TabtreeArgs),
+    Lookup(LookupCommand),
+    #[command(name = "profile-label")]
+    ProfileLabel(ProfileLabelCommand),
     Scan(ScanArgs),
     Exec(ExecArgs),
     Snapshot(SnapshotArgs),
@@ -60,6 +64,19 @@ struct TabsArgs {
     browser: Option<String>,
     #[arg(long)]
     profile: Option<String>,
+}
+
+#[derive(Debug, Args)]
+struct TabtreeArgs {
+    #[arg(long)]
+    tab: Option<String>,
+    #[arg(long)]
+    browser: Option<String>,
+    #[arg(long)]
+    profile: Option<String>,
+    /// 输出完整 URL 和 session_key；默认使用 compact 输出以减少 token 消耗。
+    #[arg(long)]
+    full: bool,
 }
 
 #[derive(Debug, Args)]
@@ -376,6 +393,75 @@ struct SetExtensionPortArgs {
     port: u16,
 }
 
+#[derive(Debug, Args)]
+struct LookupCommand {
+    #[command(subcommand)]
+    target: LookupTarget,
+}
+
+#[derive(Debug, Subcommand)]
+enum LookupTarget {
+    Tab(LookupTabArgs),
+    Browser(LookupBrowserArgs),
+    Profile(LookupProfileArgs),
+}
+
+#[derive(Debug, Args)]
+struct LookupTabArgs {
+    tab: String,
+    #[arg(long)]
+    browser: Option<String>,
+    #[arg(long)]
+    profile: Option<String>,
+}
+
+#[derive(Debug, Args)]
+struct LookupBrowserArgs {
+    browser: String,
+}
+
+#[derive(Debug, Args)]
+struct LookupProfileArgs {
+    profile: String,
+}
+
+#[derive(Debug, Args)]
+struct ProfileLabelCommand {
+    #[command(subcommand)]
+    action: ProfileLabelAction,
+}
+
+#[derive(Debug, Subcommand)]
+enum ProfileLabelAction {
+    Set(ProfileLabelSetArgs),
+    Clear(ProfileLabelClearArgs),
+}
+
+#[derive(Debug, Args)]
+struct ProfileLabelSetArgs {
+    label: String,
+    #[arg(long)]
+    profile: Option<String>,
+    #[arg(long)]
+    browser: Option<String>,
+    #[arg(long)]
+    tab: Option<String>,
+    #[arg(long, default_value_t = 30.0)]
+    timeout: f64,
+}
+
+#[derive(Debug, Args)]
+struct ProfileLabelClearArgs {
+    #[arg(long)]
+    profile: Option<String>,
+    #[arg(long)]
+    browser: Option<String>,
+    #[arg(long)]
+    tab: Option<String>,
+    #[arg(long, default_value_t = 30.0)]
+    timeout: f64,
+}
+
 pub fn run() -> Result<()> {
     let cli = Cli::parse();
     match cli.command {
@@ -400,6 +486,31 @@ pub fn run() -> Result<()> {
             print_json(request("GET", &path, None, 30.0)?);
             Ok(())
         }
+        CommandKind::Tabtree(args) => {
+            ensure_server()?;
+            let mut path = "/tabtree".to_string();
+            let mut query = Vec::new();
+            if let Some(tab) = args.tab {
+                query.push(format!("tab={}", query_escape(&tab)));
+            }
+            if let Some(browser) = args.browser {
+                query.push(format!("browser={}", query_escape(&browser)));
+            }
+            if let Some(profile) = args.profile {
+                query.push(format!("profile={}", query_escape(&profile)));
+            }
+            if args.full {
+                query.push("full=true".to_string());
+            }
+            if !query.is_empty() {
+                path.push('?');
+                path.push_str(&query.join("&"));
+            }
+            print_json(request("GET", &path, None, 30.0)?);
+            Ok(())
+        }
+        CommandKind::Lookup(args) => run_lookup_command(args),
+        CommandKind::ProfileLabel(args) => run_profile_label_command(args),
         CommandKind::Scan(args) => {
             ensure_server()?;
             print_json(request(
@@ -1095,6 +1206,64 @@ fn home_dir() -> Result<PathBuf> {
         .or_else(|| env::var_os("USERPROFILE"))
         .map(PathBuf::from)
         .ok_or_else(|| anyhow!("无法定位用户主目录"))
+}
+
+fn run_lookup_command(args: LookupCommand) -> Result<()> {
+    ensure_server()?;
+    let path = match args.target {
+        LookupTarget::Tab(args) => {
+            let mut path = format!("/lookup/tab/{}", query_escape(&args.tab));
+            let mut query = Vec::new();
+            if let Some(browser) = args.browser {
+                query.push(format!("browser={}", query_escape(&browser)));
+            }
+            if let Some(profile) = args.profile {
+                query.push(format!("profile={}", query_escape(&profile)));
+            }
+            if !query.is_empty() {
+                path.push('?');
+                path.push_str(&query.join("&"));
+            }
+            path
+        }
+        LookupTarget::Browser(args) => format!("/lookup/browser/{}", query_escape(&args.browser)),
+        LookupTarget::Profile(args) => format!("/lookup/profile/{}", query_escape(&args.profile)),
+    };
+    print_json(request("GET", &path, None, 30.0)?);
+    Ok(())
+}
+
+fn run_profile_label_command(args: ProfileLabelCommand) -> Result<()> {
+    ensure_server()?;
+    match args.action {
+        ProfileLabelAction::Set(args) => {
+            print_json(request(
+                "POST",
+                "/profile-label",
+                Some(json!({
+                    "label": args.label,
+                    "profile": args.profile,
+                    "browser": args.browser,
+                    "switch_tab_id": args.tab,
+                })),
+                args.timeout,
+            )?);
+        }
+        ProfileLabelAction::Clear(args) => {
+            print_json(request(
+                "POST",
+                "/profile-label",
+                Some(json!({
+                    "label": null,
+                    "profile": args.profile,
+                    "browser": args.browser,
+                    "switch_tab_id": args.tab,
+                })),
+                args.timeout,
+            )?);
+        }
+    }
+    Ok(())
 }
 
 fn run_target_command(path: &str, args: TargetCommandArgs) -> Result<()> {

@@ -1,3 +1,16 @@
+## 未发布
+
+## v0.3.3 - 2026-05-18
+
+- `tabtree` 默认改为 compact 输出，截断长 URL 并省略 `session_key` 以降低 token 消耗；新增 `tabtree --full` 输出完整 URL 和 `session_key`。
+- 优化 `tabtree` 实现，daemon 锁内只复制必要会话字段，锁外完成排序和 JSON 组装。
+- Chrome 扩展 popup 增加 label 唯一性提示：推荐用 CLI 设置 label 以校验当前 daemon 内跨 Profile 唯一性。
+- 平台 npm 包打包时默认对复制后的原生二进制执行 `strip`，减小发布体积；本地 `target/release` 二进制保持不变。
+- 新增 `tabtree` 树形查询命令，支持按 `tab_id`、`profile_id/profile_label`、`browser_id` 过滤，并保留 browser → profile → tab 父子节点；原先临时增加的 `profiles` / `browsers` 摘要命令已移除，统一使用 `tabtree` / `lookup`。
+- 新增 `lookup tab|browser|profile` 反查命令，可由 `tab_id` 反查 `browser_id` / `profile_id` / `profile_label`，或由 `browser_id` 反查所属 profile。
+- 移除扩展默认注入的全局 `alert` / `confirm` / `prompt` 重写，改为 CLI 页面执行期间临时抑制弹窗并在命令结束后恢复原生函数。
+- 新增 `profile-label set|clear`，并在 Chrome 扩展 popup 中支持设置 Profile Label；label 冲突时 CLI 按歧义处理，不参与内部路由主键。
+
 # 更新日志
 
 所有重要变更都会记录在这里。日期使用北京时间自然日。

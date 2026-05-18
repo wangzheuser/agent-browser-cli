@@ -43,7 +43,15 @@ agent-browser-cli status
 agent-browser-cli doctor
 agent-browser-cli logs --tail 100
 agent-browser-cli tabs
+agent-browser-cli tabtree
+agent-browser-cli tabtree --full
+agent-browser-cli tabtree --profile work
+agent-browser-cli tabtree --tab <tabId>
+agent-browser-cli lookup tab <tabId>
+agent-browser-cli lookup browser <browser_id>
+agent-browser-cli lookup profile work
 agent-browser-cli tabs --profile work
+agent-browser-cli profile-label set work --profile <profile_id>
 agent-browser-cli scan --tabs-only
 agent-browser-cli scan --profile work --tab <tabId> --text-only
 agent-browser-cli open --profile work https://example.com
@@ -81,7 +89,7 @@ agent-browser-cli send-keys --target '@e2' 'Enter'
 agent-browser-cli mouse-click '@e3'
 ```
 
-所有高层操作都支持 `--tab <tabId>`，多 Chrome Profile / 多浏览器实例时还支持 `--profile <profile_id-or-label>` 和 `--browser <browser_id>`。`tabs` 输出会包含 `browser_id`、`profile_id`、`profile_label`、`tab_id`、`session_key`。只传 `--tab` 且存在歧义时，必须补 `--profile` 或 `--browser`，不要猜。`@e` 只在当前 daemon、当前 session_key、最近一次 `snapshot` 内有效。`@e` 只接受 `@e1` 这种带 `@` 的格式。
+所有高层操作都支持 `--tab <tabId>`，多 Chrome Profile / 多浏览器实例时还支持 `--profile <profile_id-or-label>` 和 `--browser <browser_id>`。`tabs` 输出会包含 `browser_id`、`profile_id`、`profile_label`、`tab_id`、`session_key`。`tabtree` 用树形结构列出 browser → profile → tabs，支持 `--tab <tabId>`、`--profile <profile_id-or-label>`、`--browser <browser_id>` 过滤，过滤结果仍保留父子节点；默认 compact 输出会截断 URL 并省略 `session_key`，需要完整字段时用 `tabtree --full`；`lookup tab <tabId>` 可由 tab 反查 `browser_id` / `profile_id` / `profile_label`，`lookup browser <browser_id>` 可反查所属 profile。`profile-label set <label> --profile <profile_id>` 可设置当前 Chrome Profile 的 label 并校验当前 daemon 内唯一性，`profile-label clear --profile <profile_id>` 可清空；popup 设置是本地便捷入口，不保证跨 Profile 唯一；label 只允许英文、数字、`-`、`_`、`.`，当前 daemon 内匹配到多个 profile 时会报歧义，不能猜。只传 `--tab` 且存在歧义时，必须补 `--profile` 或 `--browser`。`@e` 只在当前 daemon、当前 session_key、最近一次 `snapshot` 内有效。`@e` 只接受 `@e1` 这种带 `@` 的格式。
 
 慢页面要把等待和监控分开：
 
@@ -90,6 +98,8 @@ agent-browser-cli click '@e1' --wait-js 'return document.body.innerText.includes
 ```
 
 `--wait-js` 负责等慢加载；`--monitor` 只负责操作前后页面 diff，默认关闭。
+
+弹窗处理：扩展默认不改写业务页面的 `alert` / `confirm` / `prompt`。只有 CLI 页面执行命令期间临时抑制弹窗，结束后恢复；如果怀疑页面原生弹窗行为异常，先让用户重载扩展和页面。
 
 ## 端口和扩展
 

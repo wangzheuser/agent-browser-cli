@@ -5,14 +5,14 @@ use crate::protocol::{
 use crate::{config, html};
 use anyhow::{anyhow, Result};
 use axum::extract::ws::{Message, WebSocket, WebSocketUpgrade};
-use axum::extract::{Query, State};
+use axum::extract::{Path as AxumPath, Query, State};
 use axum::http::StatusCode;
 use axum::response::IntoResponse;
 use axum::routing::{get, post};
 use axum::{Json, Router};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::fs;
 use std::net::SocketAddr;
 use std::path::{Path, PathBuf};
@@ -204,6 +204,40 @@ struct TabsQuery {
     profile: Option<String>,
 }
 
+#[derive(Debug, Deserialize, Default)]
+struct LookupTabQuery {
+    browser: Option<String>,
+    profile: Option<String>,
+}
+
+#[derive(Debug, Deserialize, Default)]
+struct TabtreeQuery {
+    tab: Option<String>,
+    browser: Option<String>,
+    profile: Option<String>,
+    #[serde(default)]
+    full: bool,
+}
+
+#[derive(Debug, Clone)]
+struct SessionTreeItem {
+    browser_id: String,
+    profile_id: String,
+    profile_label: Option<String>,
+    tab_id: String,
+    session_key: String,
+    title: String,
+    url: String,
+}
+
+#[derive(Debug, Deserialize)]
+struct ProfileLabelRequest {
+    label: Option<String>,
+    switch_tab_id: Option<String>,
+    browser: Option<String>,
+    profile: Option<String>,
+}
+
 #[derive(Debug, Deserialize)]
 struct TabRequest {
     switch_tab_id: Option<String>,
@@ -324,6 +358,11 @@ pub async fn run_daemon() -> Result<()> {
         .route("/", get(root))
         .route("/health", get(health))
         .route("/tabs", get(tabs))
+        .route("/tabtree", get(tabtree))
+        .route("/lookup/tab/:tab_id", get(lookup_tab))
+        .route("/lookup/browser/:browser_id", get(lookup_browser))
+        .route("/lookup/profile/:profile", get(lookup_profile))
+        .route("/profile-label", post(set_profile_label))
         .route("/scan", post(scan))
         .route("/exec", post(exec))
         .route("/open", post(open_tab))
@@ -569,16 +608,313 @@ async fn health(State(state): State<AppState>) -> Json<Value> {
 
 async fn tabs(State(state): State<AppState>, Query(query): Query<TabsQuery>) -> Json<Value> {
     touch(&state).await;
-    let tabs = active_tabs_filtered(
+    match active_tabs_filtered(
         &state,
         true,
         query.browser.as_deref(),
         query.profile.as_deref(),
     )
-    .await;
-    Json(
-        json!({ "ok": true, "result": { "status": "success", "metadata": { "tabs_count": tabs.len(), "tabs": tabs } } }),
-    )
+    .await
+    {
+        Ok(tabs) => Json(
+            json!({ "ok": true, "result": { "status": "success", "metadata": { "tabs_count": tabs.len(), "tabs": tabs } } }),
+        ),
+        Err(err) => Json(json!({ "ok": false, "error": err.to_string() })),
+    }
+}
+
+async fn tabtree(State(state): State<AppState>, Query(query): Query<TabtreeQuery>) -> Json<Value> {
+    touch(&state).await;
+    wait_for_sessions(&state, Duration::from_secs(5)).await;
+    let items: Vec<SessionTreeItem> = {
+        let driver = state.driver.lock().await;
+        driver
+            .sessions
+            .values()
+            .filter(|s| s.is_active())
+            .filter(|s| {
+                query
+                    .browser
+                    .as_deref()
+                    .map(|browser| s.browser_id == browser)
+                    .unwrap_or(true)
+            })
+            .filter(|s| {
+                query
+                    .profile
+                    .as_deref()
+                    .map(|profile| {
+                        s.profile_id == profile || s.profile_label.as_deref() == Some(profile)
+                    })
+                    .unwrap_or(true)
+            })
+            .filter(|s| {
+                query
+                    .tab
+                    .as_deref()
+                    .map(|tab| s.tab_id == tab || s.session_key == tab)
+                    .unwrap_or(true)
+            })
+            .map(|s| SessionTreeItem {
+                browser_id: s.browser_id.clone(),
+                profile_id: s.profile_id.clone(),
+                profile_label: s.profile_label.clone(),
+                tab_id: s.tab_id.clone(),
+                session_key: s.session_key.clone(),
+                title: s.info.title.clone(),
+                url: s.info.url.clone(),
+            })
+            .collect()
+    };
+
+    let mut browser_map: HashMap<String, HashMap<String, Vec<SessionTreeItem>>> = HashMap::new();
+    for item in items {
+        browser_map
+            .entry(item.browser_id.clone())
+            .or_default()
+            .entry(item.profile_id.clone())
+            .or_default()
+            .push(item);
+    }
+
+    let mut browsers: Vec<Value> = browser_map
+        .into_iter()
+        .map(|(browser_id, profiles)| {
+            let mut profile_nodes: Vec<Value> = profiles
+                .into_iter()
+                .map(|(profile_id, mut sessions)| {
+                    sessions.sort_by(|a, b| a.tab_id.cmp(&b.tab_id));
+                    let profile_label = sessions.iter().find_map(|s| s.profile_label.clone());
+                    let tabs: Vec<Value> = sessions
+                        .iter()
+                        .map(|s| tabtree_tab_json(s, query.full))
+                        .collect();
+                    json!({
+                        "profile_id": profile_id,
+                        "profile_label": profile_label,
+                        "tabs_count": tabs.len(),
+                        "tabs": tabs,
+                    })
+                })
+                .collect();
+            profile_nodes.sort_by(|a, b| {
+                a.get("profile_label")
+                    .and_then(Value::as_str)
+                    .unwrap_or("")
+                    .cmp(b.get("profile_label").and_then(Value::as_str).unwrap_or(""))
+                    .then_with(|| {
+                        a.get("profile_id")
+                            .and_then(Value::as_str)
+                            .unwrap_or("")
+                            .cmp(b.get("profile_id").and_then(Value::as_str).unwrap_or(""))
+                    })
+            });
+            let tabs_count: usize = profile_nodes
+                .iter()
+                .map(|p| p.get("tabs_count").and_then(Value::as_u64).unwrap_or(0) as usize)
+                .sum();
+            json!({
+                "browser_id": browser_id,
+                "profiles_count": profile_nodes.len(),
+                "tabs_count": tabs_count,
+                "profiles": profile_nodes,
+            })
+        })
+        .collect();
+    browsers.sort_by(|a, b| {
+        a.get("browser_id")
+            .and_then(Value::as_str)
+            .unwrap_or("")
+            .cmp(b.get("browser_id").and_then(Value::as_str).unwrap_or(""))
+    });
+    let profiles_count: usize = browsers
+        .iter()
+        .map(|b| b.get("profiles_count").and_then(Value::as_u64).unwrap_or(0) as usize)
+        .sum();
+    let tabs_count: usize = browsers
+        .iter()
+        .map(|b| b.get("tabs_count").and_then(Value::as_u64).unwrap_or(0) as usize)
+        .sum();
+    Json(json!({
+        "ok": true,
+        "result": {
+            "status": "success",
+            "compact": !query.full,
+            "filters": {
+                "tab": query.tab,
+                "browser": query.browser,
+                "profile": query.profile,
+            },
+            "browsers_count": browsers.len(),
+            "profiles_count": profiles_count,
+            "tabs_count": tabs_count,
+            "browsers": browsers,
+        }
+    }))
+}
+
+fn tabtree_tab_json(item: &SessionTreeItem, full: bool) -> Value {
+    if full {
+        json!({
+            "tab_id": item.tab_id,
+            "session_key": item.session_key,
+            "title": item.title,
+            "url": item.url,
+        })
+    } else {
+        json!({
+            "tab_id": item.tab_id,
+            "title": item.title,
+            "url": truncate_for_tree(&item.url, 120),
+        })
+    }
+}
+
+fn truncate_for_tree(input: &str, max_chars: usize) -> String {
+    if input.chars().count() <= max_chars {
+        return input.to_string();
+    }
+    format!("{}...", input.chars().take(max_chars).collect::<String>())
+}
+
+async fn lookup_tab(
+    State(state): State<AppState>,
+    AxumPath(tab_id): AxumPath<String>,
+    Query(query): Query<LookupTabQuery>,
+) -> Json<Value> {
+    touch(&state).await;
+    wait_for_sessions(&state, Duration::from_secs(5)).await;
+    let driver = state.driver.lock().await;
+    let matches: Vec<&Session> = driver
+        .sessions
+        .values()
+        .filter(|s| s.is_active())
+        .filter(|s| s.tab_id == tab_id || s.session_key == tab_id)
+        .filter(|s| {
+            query
+                .browser
+                .as_deref()
+                .map(|browser| s.browser_id == browser)
+                .unwrap_or(true)
+        })
+        .filter(|s| {
+            query
+                .profile
+                .as_deref()
+                .map(|profile| {
+                    s.profile_id == profile || s.profile_label.as_deref() == Some(profile)
+                })
+                .unwrap_or(true)
+        })
+        .collect();
+    if matches.is_empty() {
+        return Json(json!({ "ok": false, "error": format!("tab {tab_id} 未连接") }));
+    }
+    if matches.len() > 1 {
+        let sessions: Vec<Value> = matches.iter().map(|s| session_lookup_json(s)).collect();
+        return Json(json!({
+            "ok": false,
+            "error": format!("tab {tab_id} 存在歧义，匹配到 {} 个会话，请补 --profile 或 --browser", sessions.len()),
+            "matches": sessions,
+        }));
+    }
+    Json(json!({ "ok": true, "result": session_lookup_json(matches[0]) }))
+}
+
+async fn lookup_browser(
+    State(state): State<AppState>,
+    AxumPath(browser_id): AxumPath<String>,
+) -> Json<Value> {
+    touch(&state).await;
+    wait_for_sessions(&state, Duration::from_secs(5)).await;
+    let driver = state.driver.lock().await;
+    let sessions: Vec<&Session> = driver
+        .sessions
+        .values()
+        .filter(|s| s.is_active() && s.browser_id == browser_id)
+        .collect();
+    if sessions.is_empty() {
+        return Json(json!({ "ok": false, "error": format!("browser {browser_id} 未连接") }));
+    }
+    let first = sessions[0];
+    Json(json!({
+        "ok": true,
+        "result": {
+            "browser_id": browser_id,
+            "profile_id": first.profile_id,
+            "profile_label": first.profile_label,
+            "tabs_count": sessions.len(),
+            "tabs": sessions.iter().map(|s| session_lookup_json(s)).collect::<Vec<_>>(),
+        }
+    }))
+}
+
+async fn lookup_profile(
+    State(state): State<AppState>,
+    AxumPath(profile): AxumPath<String>,
+) -> Json<Value> {
+    touch(&state).await;
+    wait_for_sessions(&state, Duration::from_secs(5)).await;
+    let driver = state.driver.lock().await;
+    let sessions: Vec<&Session> = driver
+        .sessions
+        .values()
+        .filter(|s| {
+            s.is_active()
+                && (s.profile_id == profile || s.profile_label.as_deref() == Some(profile.as_str()))
+        })
+        .collect();
+    if sessions.is_empty() {
+        return Json(json!({ "ok": false, "error": format!("profile {profile} 未连接") }));
+    }
+    let profile_ids: HashSet<String> = sessions.iter().map(|s| s.profile_id.clone()).collect();
+    if profile_ids.len() > 1 {
+        let matches: Vec<Value> = sessions.iter().map(|s| session_lookup_json(s)).collect();
+        return Json(json!({
+            "ok": false,
+            "error": format!("profile {profile:?} 存在歧义，匹配到多个 profile"),
+            "matches": matches,
+        }));
+    }
+    let first = sessions[0];
+    let mut browser_ids: Vec<String> = sessions.iter().map(|s| s.browser_id.clone()).collect();
+    browser_ids.sort();
+    browser_ids.dedup();
+    Json(json!({
+        "ok": true,
+        "result": {
+            "profile_id": first.profile_id,
+            "profile_label": first.profile_label,
+            "browser_ids": browser_ids,
+            "browser_count": browser_ids.len(),
+            "tabs_count": sessions.len(),
+            "tabs": sessions.iter().map(|s| session_lookup_json(s)).collect::<Vec<_>>(),
+        }
+    }))
+}
+
+fn session_lookup_json(session: &Session) -> Value {
+    json!({
+        "browser_id": session.browser_id,
+        "profile_id": session.profile_id,
+        "profile_label": session.profile_label,
+        "tab_id": session.tab_id,
+        "session_key": session.session_key,
+        "title": session.info.title,
+        "url": session.info.url,
+    })
+}
+
+async fn set_profile_label(
+    State(state): State<AppState>,
+    Json(req): Json<ProfileLabelRequest>,
+) -> Json<Value> {
+    touch(&state).await;
+    let result = update_profile_label(&state, req).await;
+    Json(match result {
+        Ok(value) => json!({ "ok": true, "result": value }),
+        Err(err) => json!({ "ok": false, "error": err.to_string() }),
+    })
 }
 
 async fn scan(State(state): State<AppState>, Json(req): Json<ScanRequest>) -> Json<Value> {
@@ -809,8 +1145,117 @@ async fn cleanup_on_shutdown(state: &AppState) -> Value {
     })
 }
 
+fn normalize_profile_label(label: Option<String>) -> Result<Option<String>> {
+    let Some(label) = label else {
+        return Ok(None);
+    };
+    let trimmed = label.trim();
+    if trimmed.is_empty() {
+        return Ok(None);
+    }
+    if trimmed.chars().count() > 40 {
+        return Err(anyhow!("profile label 长度不能超过 40 个字符"));
+    }
+    if !trimmed
+        .chars()
+        .all(|c| c.is_ascii_alphanumeric() || matches!(c, '-' | '_' | '.'))
+    {
+        return Err(anyhow!("profile label 只能包含英文、数字、-、_、."));
+    }
+    Ok(Some(trimmed.to_string()))
+}
+
+async fn update_profile_label(state: &AppState, req: ProfileLabelRequest) -> Result<Value> {
+    let label = normalize_profile_label(req.label)?;
+    let session_key = select_tab(
+        state,
+        SessionSelector::new(req.switch_tab_id, req.browser, req.profile),
+    )
+    .await?;
+    let (profile_id, browser_id, tab_id, sender) = {
+        let driver = state.driver.lock().await;
+        let session = driver
+            .sessions
+            .get(&session_key)
+            .filter(|s| s.is_active())
+            .ok_or_else(|| anyhow!("会话ID {session_key} 未连接"))?;
+        if let Some(label) = label.as_deref() {
+            let duplicate = driver.sessions.values().find(|s| {
+                s.is_active()
+                    && s.profile_id != session.profile_id
+                    && s.profile_label.as_deref() == Some(label)
+            });
+            if let Some(duplicate) = duplicate {
+                return Err(anyhow!(
+                    "profile label {label:?} 已被 profile {} 使用",
+                    duplicate.profile_id
+                ));
+            }
+        }
+        (
+            session.profile_id.clone(),
+            session.browser_id.clone(),
+            session.tab_id.clone(),
+            session.sender.clone(),
+        )
+    };
+
+    let exec_id = Uuid::new_v4().to_string();
+    let payload = json!({
+        "id": exec_id,
+        "code": json!({ "cmd": "setProfileLabel", "label": label }).to_string(),
+        "tabId": tab_id.parse::<i64>().unwrap_or_default()
+    })
+    .to_string();
+    let (tx, rx) = oneshot::channel();
+    {
+        let mut driver = state.driver.lock().await;
+        driver.pending.insert(
+            exec_id.clone(),
+            crate::protocol::PendingExec {
+                delivered_at: None,
+                tx,
+            },
+        );
+        driver
+            .active_exec_sessions
+            .insert(exec_id.clone(), session_key.clone());
+    }
+    sender
+        .send(payload)
+        .map_err(|_| anyhow!("浏览器扩展连接已断开"))?;
+    match tokio::time::timeout(Duration::from_secs(10), rx).await {
+        Ok(Ok(Ok(_))) => {}
+        Ok(Ok(Err(err))) => return Err(err),
+        Ok(Err(_)) => return Err(anyhow!("执行结果通道已关闭")),
+        Err(_) => {
+            let mut driver = state.driver.lock().await;
+            driver.acked.remove(&exec_id);
+            driver.pending.remove(&exec_id);
+            driver.active_exec_sessions.remove(&exec_id);
+            return Err(anyhow!("设置 profile label 超时"));
+        }
+    }
+
+    let mut driver = state.driver.lock().await;
+    for session in driver.sessions.values_mut() {
+        if session.profile_id == profile_id && session.browser_id == browser_id {
+            session.profile_label = label.clone();
+            session.info.profile_label = label.clone();
+        }
+    }
+    Ok(json!({
+        "status": "success",
+        "profile_id": profile_id,
+        "browser_id": browser_id,
+        "profile_label": label,
+    }))
+}
+
 async fn active_tabs(state: &AppState, wait_ready: bool) -> Vec<TabInfo> {
-    active_tabs_filtered(state, wait_ready, None, None).await
+    active_tabs_filtered(state, wait_ready, None, None)
+        .await
+        .unwrap_or_default()
 }
 
 async fn active_tabs_filtered(
@@ -818,12 +1263,30 @@ async fn active_tabs_filtered(
     wait_ready: bool,
     browser: Option<&str>,
     profile: Option<&str>,
-) -> Vec<TabInfo> {
+) -> Result<Vec<TabInfo>> {
     if wait_ready {
         wait_for_sessions(state, Duration::from_secs(5)).await;
     }
     let driver = state.driver.lock().await;
-    driver
+    if let Some(profile) = profile {
+        let matched_profile_ids: HashSet<String> = driver
+            .sessions
+            .values()
+            .filter(|s| s.is_active())
+            .filter(|s| browser.map(|b| s.browser_id == b).unwrap_or(true))
+            .filter(|s| s.profile_label.as_deref() == Some(profile))
+            .map(|s| s.profile_id.clone())
+            .collect();
+        if matched_profile_ids.len() > 1 {
+            let mut ids: Vec<String> = matched_profile_ids.into_iter().collect();
+            ids.sort();
+            return Err(anyhow!(
+                "profile label {profile:?} 存在歧义，匹配到多个 profile: {}",
+                ids.join(", ")
+            ));
+        }
+    }
+    Ok(driver
         .sessions
         .values()
         .filter(|s| s.is_active())
@@ -840,7 +1303,7 @@ async fn active_tabs_filtered(
             }
             info
         })
-        .collect()
+        .collect())
 }
 
 async fn has_extension_connection(state: &AppState) -> bool {
@@ -1916,6 +2379,22 @@ async fn select_tab(state: &AppState, selector: SessionSelector) -> Result<Strin
         let session_key = matches[0].session_key.clone();
         driver.default_session_key = Some(session_key.clone());
         return Ok(session_key);
+    }
+
+    if let Some(profile) = selector.profile.as_deref() {
+        let matched_profile_ids: HashSet<String> = matches
+            .iter()
+            .filter(|s| s.profile_label.as_deref() == Some(profile))
+            .map(|s| s.profile_id.clone())
+            .collect();
+        if matched_profile_ids.len() > 1 {
+            let mut ids: Vec<String> = matched_profile_ids.into_iter().collect();
+            ids.sort();
+            return Err(anyhow!(
+                "profile label {profile:?} 存在歧义，匹配到多个 profile: {}",
+                ids.join(", ")
+            ));
+        }
     }
 
     if selector.browser.is_some() || selector.profile.is_some() {

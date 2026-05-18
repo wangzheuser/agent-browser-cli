@@ -9,6 +9,7 @@ button{background:#264f78;color:#fff;border:none;padding:4px 12px;cursor:pointer
 button:hover{background:#37699e}
 input{width:86px;background:#252526;color:#d4d4d4;border:1px solid #3c3c3c;border-radius:3px;padding:4px;font:12px monospace}
 label{display:inline-flex;align-items:center;gap:6px;margin-right:6px}
+#profileLabel{width:150px}
 .panel{margin-bottom:8px;padding:6px;background:#252526;border-radius:3px}
 .row{display:flex;align-items:center;gap:6px;margin-top:6px}
 .status{color:#9cdcfe}
@@ -25,6 +26,17 @@ pre{white-space:pre-wrap;word-break:break-all;margin:0;padding:6px;background:#2
     <button id="savePort">保存并重连</button>
   </div>
   <div id="portMsg"></div>
+</div>
+<h3>👤 Profile</h3>
+<div class="panel">
+  <div id="profileStatus" class="status">读取 Profile...</div>
+  <div class="row">
+    <label>Label <input id="profileLabel" type="text" maxlength="40" placeholder="work"></label>
+    <button id="saveProfileLabel">保存</button>
+    <button id="clearProfileLabel">清空</button>
+  </div>
+  <div id="profileMsg"></div>
+  <div class="status">建议用 CLI 设置 label，可校验跨 Profile 唯一性。</div>
 </div>
 <h3>🍪 Cookies</h3>
 <button id="refresh">刷新</button>

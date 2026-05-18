@@ -1,5 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
+import { spawnSync } from "node:child_process";
 
 const [, , targetName, binaryPath] = process.argv;
 
@@ -31,7 +32,16 @@ const outDir = path.resolve("npm", "platform", targetName);
 const binDir = path.join(outDir, "bin");
 fs.rmSync(outDir, { recursive: true, force: true });
 fs.mkdirSync(binDir, { recursive: true });
-fs.copyFileSync(binaryPath, path.join(binDir, `agent-browser-cli${meta.ext}`));
+const outBinary = path.join(binDir, `agent-browser-cli${meta.ext}`);
+fs.copyFileSync(binaryPath, outBinary);
+
+// 平台包发布的是运行二进制，默认移除符号表以减小 npm 包体积；本地 target/release 保持不变，便于排查。
+if (process.env.AGENT_BROWSER_CLI_SKIP_STRIP !== "1") {
+  const strip = spawnSync("strip", [outBinary], { stdio: "ignore" });
+  if (strip.status !== 0) {
+    console.warn(`[package-platform] strip skipped or failed for ${targetName}`);
+  }
+}
 
 fs.writeFileSync(
   path.join(outDir, "package.json"),
