@@ -649,6 +649,7 @@ async function handleBatch(msg, sender) {
         R.push({ ok: true, data: tabs.map(t => ({ id: t.id, url: t.url, title: t.title, active: t.active, windowId: t.windowId })) });
       } else if (c.cmd === 'cdp') {
         const tabId = c.tabId || msg.tabId || sender.tab?.id;
+        if (!tabId) throw new Error('no tabId');
         if (c.method === 'Page.bringToFront' && c.allowFocus !== true && msg.allowFocus !== true) {
           R.push({ skipped: true, reason: 'Page.bringToFront requires allowFocus=true' });
           continue;
